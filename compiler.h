@@ -8,6 +8,7 @@
 
 #include <string>
 #include <vector>
+#include "parseProgram.h"
 
 extern int mem[1000];
 extern int next_available;
