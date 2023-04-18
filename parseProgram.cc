@@ -71,6 +71,10 @@ struct InstructionNode *parse_body()
             break;
         }
         tail = start;
+        while (tail->next != NULL)
+        {
+            tail = tail->next;
+        }
         tail->next = NULL;
     }
     if (tkn.token_type != RBRACE)
@@ -111,8 +115,15 @@ struct InstructionNode *parse_body()
                 tail = tail->next;
             }
             tkn = lexer.GetToken();
+            //std::cout << "peek " << tkn.lexeme << std::endl;
         }
     }
+   /* InstructionNode *it = start;
+    while (it != NULL)
+    {
+        std::cout << "node " << it->type << std::endl;
+        it = it->next;
+    }*/
     return start;
 }
 
@@ -203,12 +214,48 @@ struct InstructionNode *parse_assign_stmt()
 
 struct InstructionNode *parse_while_stmt()
 {
+    // eval
+    // body
+    // jump
+    // target
 
+    InstructionNode *target = new InstructionNode;
+    target->type = NOOP;
+    target->next = NULL;
+
+    InstructionNode *eval_if = create_cjmp_node();
+    eval_if->cjmp_inst.target = target;
+
+    lexer.GetToken(); // consume LBRACE
+
+    InstructionNode *if_stmt_body = parse_body();
+
+    InstructionNode *goto_eval = new InstructionNode;
+    goto_eval->type = JMP;
+    goto_eval->jmp_inst.target = eval_if;
+
+    if (if_stmt_body != NULL)
+    {
+        eval_if->next = if_stmt_body;
+        while (if_stmt_body->next != NULL)
+        {
+            if_stmt_body = if_stmt_body->next;
+        }
+        if_stmt_body->next = goto_eval;
+    }
+    else
+    {
+        eval_if->next = goto_eval; // this would cause an infinite loop
+    }
+
+    goto_eval->next = target;
+
+    return eval_if;
 }
 
-struct InstructionNode *create_cjmp_node(){
+struct InstructionNode *create_cjmp_node()
+{
 
-    
     // if condition is false, we jump. so, our content inside the if should be the nodes before the jump address
     InstructionNode *eval_if = new InstructionNode;
     eval_if->type = CJMP;
@@ -271,35 +318,27 @@ struct InstructionNode *parse_if_stmt()
     if (if_stmt_body != NULL)
     {
         eval_if->next = if_stmt_body;
-        std::cout << "eval if next after assign: " << eval_if->next->type << std::endl;
-        std::cout << "body of if:" << std::endl;
-        std::cout << if_stmt_body->type << std::endl;
-        std::cout << "after if:" << std::endl;
-        std::cout << if_stmt_body->next << std::endl;
         while (if_stmt_body->next != NULL)
         {
-            std::cout << if_stmt_body->type << std::endl;
             if_stmt_body = if_stmt_body->next;
         }
         if_stmt_body->next = target;
     }
     else
     {
-        std::cout << "returned list is null" << std::endl;
         eval_if->next = target;
     }
-    std::cout << "eval if next: " << eval_if->next->type << std::endl;
     return eval_if;
 }
 
 struct InstructionNode *parse_for_stmt()
 {
-    //assign for var
-    //eval for var
-    //for body; go back to it depending on the conditional jump
-    //increment var
-    //jump to eval
-    lexer.GetToken(); //consume LPAREN
+    // assign for var
+    // eval for var
+    // for body; go back to it depending on the conditional jump
+    // increment var
+    // jump to eval
+    lexer.GetToken(); // consume LPAREN
     InstructionNode *initialize_var = parse_assign_stmt();
     InstructionNode *target = new InstructionNode;
     target->type = NOOP;
@@ -308,13 +347,13 @@ struct InstructionNode *parse_for_stmt()
     InstructionNode *eval_if = create_cjmp_node();
     eval_if->cjmp_inst.target = target;
 
-    lexer.GetToken(); //consume semicolon
+    lexer.GetToken(); // consume semicolon
 
     InstructionNode *alter_var = parse_assign_stmt();
 
-    lexer.GetToken(); //consume rparen
+    lexer.GetToken(); // consume rparen
 
-    lexer.GetToken(); //consume LBRACE
+    lexer.GetToken(); // consume LBRACE
 
     InstructionNode *for_body = parse_body();
 
@@ -324,6 +363,10 @@ struct InstructionNode *parse_for_stmt()
 
     initialize_var->next = eval_if;
     eval_if->next = for_body;
+    while (for_body->next != NULL)
+    {
+        for_body = for_body->next;
+    }
     for_body->next = alter_var;
     alter_var->next = goto_eval;
     goto_eval->next = target;
@@ -333,6 +376,164 @@ struct InstructionNode *parse_for_stmt()
 
 struct InstructionNode *parse_switch_stmt()
 {
+    // Node Order:
+    // cjmp case 1
+    // cjmp case 2
+    //...
+    // default statement
+    // jump to target
+    // case 1 body
+    // jump to target
+    // case 2 body
+    // jump to target
+    //...
+    // target
+
+    Token val = lexer.GetToken();
+
+    InstructionNode *target = new InstructionNode;
+    target->type = NOOP;
+    target->next = NULL;
+
+    InstructionNode *case_bodies_tail = NULL;
+    InstructionNode *case_bodies = NULL;
+    InstructionNode *cjmps = NULL;
+    InstructionNode *cjmps_tail = NULL;
+
+    lexer.GetToken(); // consume LBRACE
+    Token tkn = lexer.GetToken();
+    while (tkn.token_type != RBRACE && tkn.token_type != DEFAULT)
+    {
+        // std::cout << tkn.lexeme << std::endl;
+        if (tkn.token_type == CASE)
+        {
+            if (cjmps == NULL)
+            {
+                cjmps = parse_case(location_table[val.lexeme]);
+                cjmps->cjmp_inst.target = cjmps->next;
+                case_bodies = cjmps->next;
+                cjmps->next = NULL;
+                cjmps_tail = cjmps;
+                case_bodies_tail = case_bodies;
+                // std::cout << tail->type << std::endl;
+
+                while (case_bodies_tail->next != NULL)
+                {
+                    case_bodies_tail = case_bodies_tail->next;
+                }
+                // std::cout << tail->type << std::endl;
+                case_bodies_tail->jmp_inst.target = target;
+                case_bodies_tail->next = NULL;
+                // std::cout << tail->type << std::endl;
+            }
+            else
+            {
+                // std::cout << " case # > 1" << std::endl;
+                // std::cout << tail->type << std::endl;
+                // std::cout << tail->next << std::endl;
+
+                cjmps_tail->next = parse_case(location_table[val.lexeme]);
+                // std::cout << tail->next << std::endl;
+                cjmps_tail = cjmps_tail->next;
+                cjmps_tail->cjmp_inst.target = cjmps_tail->next;
+                case_bodies_tail->next = cjmps_tail->next;
+                cjmps_tail->next = NULL;
+
+                // std::cout << tail->type << std::endl;
+
+                while (case_bodies_tail->next != NULL)
+                {
+                    case_bodies_tail = case_bodies_tail->next;
+                }
+                // std::cout << tail->type << std::endl;
+                case_bodies_tail->jmp_inst.target = target;
+                case_bodies_tail->next = NULL;
+                // std::cout << tail->type << std::endl;
+            }
+        }
+        // std::cout << "about to consume: " << lexer.peek(1).token_type << std::endl;
+        tkn = lexer.GetToken();
+    }
+    //std::cout << tkn.token_type << std::endl; 
+    InstructionNode *goto_end = new InstructionNode;
+    goto_end->type = JMP;
+    goto_end->jmp_inst.target = target;
+    goto_end->next = case_bodies;
+    if (tkn.token_type == DEFAULT)
+    {
+        lexer.GetToken(); // consume colon
+        lexer.GetToken(); // consume LBRACE
+        InstructionNode *default_case = parse_body();
+        cjmps_tail->next = default_case;
+
+        while (default_case->next != NULL)
+        {
+            default_case = default_case->next;
+        }
+        default_case->next = goto_end;
+         lexer.GetToken();
+    }
+    else
+    {
+        cjmps_tail->next = goto_end;
+    }
+    // std::cout << "last before target: " << tail->type << std::endl;
+    case_bodies_tail->next = target;
+    // std::cout << "about to consume: " << lexer.peek(1).token_type << std::endl;
+    // lexer.GetToken(); // consume RBRACE
+    /*std::cout << "switch " << std::endl;
+    InstructionNode *it = cjmps;
+    while (it != NULL)
+    {
+        std::cout << "node " << it->type << std::endl;
+        it = it->next;
+    }*/
+    return cjmps;
+}
+
+struct InstructionNode *parse_case(int op1_addy)
+{
+    // need to assign the next case's if or target/default if this is the last case
+    // to our current case's jump if false target, as well as the target for if we enter a case
+    Token val2 = lexer.GetToken();
+    InstructionNode *eval_stmt = new InstructionNode;
+    eval_stmt->type = CJMP;
+    eval_stmt->cjmp_inst.condition_op = CONDITION_NOTEQUAL;
+    eval_stmt->cjmp_inst.operand1_index = op1_addy;
+    // assign eval_stmt->cjmp_inst.target in calling func
+    mem[next_available] = stoi(val2.lexeme);
+    eval_stmt->cjmp_inst.operand2_index = next_available;
+    next_available++;
+    lexer.GetToken(); // consume colon
+    lexer.GetToken(); // consume LBRACE
+
+    InstructionNode *case_body = parse_body();
+
+    InstructionNode *goto_end = new InstructionNode;
+    goto_end->type = JMP;
+    // assign goto_end->jmp_inst.target to the target in the calling func (parse_switch)
+    if (case_body != NULL)
+    {
+        eval_stmt->next = case_body;
+        while (case_body->next != NULL)
+        {
+            case_body = case_body->next;
+        }
+        case_body->next = goto_end;
+    }
+    else
+    {
+        eval_stmt->next = goto_end;
+    }
+    goto_end->next = NULL;
+
+    /*InstructionNode *it = eval_stmt;
+    while(it != NULL){
+        std::cout << "node " << it->type << std::endl;
+        it = it->next;
+    }*/
+
+    return eval_stmt;
 }
 
 struct InstructionNode *parse_input_stmt()

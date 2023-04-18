@@ -1,0 +1,19 @@
+i, j;
+{
+	input i;
+	SWITCH i {
+	CASE 6: {}
+	CASE 2:{
+	output i;
+	
+	}
+	DEFAULT: {
+	output i;
+}
+}
+  	i = 42 ;
+  	j = i + 1; 
+	output i;
+	output j;
+}
+1 2 3

@@ -20,5 +20,7 @@ struct InstructionNode* parse_switch_stmt();
 struct InstructionNode* parse_for_stmt();
 struct InstructionNode* parse_input_stmt();
 struct InstructionNode* parse_output_stmt();
+struct InstructionNode* create_cjmp_node();
+struct InstructionNode* parse_case(int);
 
 #endif  //__parseProgram__H__

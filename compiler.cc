@@ -37,12 +37,11 @@ void execute_program(struct InstructionNode *program)
 {
     struct InstructionNode *pc = program;
     int op1, op2, result;
-
+    std::cout << "program start" << std::endl;
     while (pc != NULL)
     {
         std::cout << pc->type << std::endl;
-        if(pc->next != NULL)
-        std::cout << " following node " << pc->next->type << std::endl;
+        //std::cout << " following node " << pc->next->type << std::endl;
         switch (pc->type)
         {
         case NOOP:
